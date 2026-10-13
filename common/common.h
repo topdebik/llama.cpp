@@ -588,6 +588,11 @@ struct common_params {
     // only takes effect when cache_type_k == GGML_TYPE_Q4_0; see docs/kv-mean-center.md
     std::string kv_mean_center_path = "";
 
+    std::string triattention_stats_path;            // TRIA calibration binary path
+    int32_t     triattention_budget     = 0;        // per-layer Top-B; 0 disables
+    int32_t     triattention_interval   = 128;      // score every β tokens
+    int32_t     triattention_keep_first = 4;        // attention sink (first-N always kept)
+
     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
 
     // multimodal models (see tools/mtmd)

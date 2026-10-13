@@ -209,8 +209,8 @@ option(GGML_CUDA_NO_PEER_COPY               "ggml: do not use peer to peer copie
 option(GGML_CUDA_NO_VMM                     "ggml: do not try to use CUDA VMM"                OFF)
 option(GGML_CUDA_FA                         "ggml: compile ggml FlashAttention CUDA kernels"  ON)
 option(GGML_CUDA_FA_ALL_QUANTS              "ggml: compile all quants for FlashAttention"     OFF)
-set   (GGML_CUDA_FA_QUANTS "q4_0-q4_0;q8_0-q8_0;f16-f16;bf16-bf16" CACHE STRING
-                                            "ggml: FlashAttention K-V type combinations to compile, \"all\" or a list such as \"q8_0-q8_0;q8_0-q4_0\"")
+set   (GGML_CUDA_FA_QUANTS "q4_0-q4_0;q8_0-q8_0;f16-f16;bf16-bf16;tbq3_0-tbq3_0;tbq3_0-tbq4_0;tbq4_0-tbq3_0;tbq4_0-tbq4_0;tbqp3_0-tbq3_0;tbqp3_0-tbq4_0;tbqp4_0-tbq3_0;tbqp4_0-tbq4_0;f16-tbq3_0;f16-tbq4_0;tbq3_0-f16;tbq4_0-f16;tbqp3_0-f16;tbqp4_0-f16;tbq3_1-tbq3_1;tbq3_1-tbq4_1;tbq4_1-tbq3_1;tbq4_1-tbq4_1;tbqp3_1-tbq3_1;tbqp3_1-tbq4_1;tbqp4_1-tbq3_1;tbqp4_1-tbq4_1;f16-tbq3_1;f16-tbq4_1;tbq3_1-f16;tbq4_1-f16;tbqp3_1-f16;tbqp4_1-f16;tbq3_3-tbq3_2;tbq3_3-tbq4_2;tbq4_3-tbq3_2;tbq4_3-tbq4_2;tbqp3_3-tbq3_2;tbqp3_3-tbq4_2;tbqp4_3-tbq3_2;tbqp4_3-tbq4_2;f16-tbq3_2;f16-tbq4_2;tbq3_2-f16;tbq3_3-f16;tbq4_3-f16;tbqp3_3-f16;tbqp4_3-f16" CACHE STRING
+                                            "ggml: FlashAttention K-V type combinations to compile, \"all\" or a list such as \"q8_0-q8_0;q8_0-q4_0\" (includes TurboQuant tbq*/tbqp* KV cache types)")
 option(GGML_CUDA_GRAPHS                     "ggml: use CUDA graphs (llama.cpp only)"          ${GGML_CUDA_GRAPHS_DEFAULT})
 option(GGML_CUDA_NCCL                       "ggml: use NVIDIA Collective Comm. Library"       ON)
 set   (GGML_CUDA_COMPRESSION_MODE "size" CACHE STRING

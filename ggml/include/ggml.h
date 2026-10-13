@@ -430,8 +430,34 @@ extern "C" {
         GGML_TYPE_NVFP4   = 40, // NVFP4 (4 blocks, E4M3 scale)
         GGML_TYPE_Q1_0    = 41,
         GGML_TYPE_Q2_0    = 42,
+        // TurboQuant (KV cache) types — parked in the otherwise unused 43..141 range so the
+        // prism-private weight types above keep their ids.  The TBQ3_0..TBQP4_4 family is kept
+        // contiguous (43..62, TBQ3_0 first) so `>= GGML_TYPE_TBQ3_0 && <= GGML_TYPE_TBQP4_4`
+        // range guards behave exactly like in the upstream TurboQuant fork.
+        GGML_TYPE_TBQ3_0  = 43, // TurboQuant 3-bit (rotation + Lloyd-Max), blck_size=256
+        GGML_TYPE_TBQ4_0  = 44, // TurboQuant 4-bit (rotation + Lloyd-Max), blck_size=256
+        GGML_TYPE_TBQP3_0 = 45, // TurboQuant_prod 3-bit (2-bit Lloyd-Max + 1-bit QJL)
+        GGML_TYPE_TBQP4_0 = 46, // TurboQuant_prod 4-bit (3-bit Lloyd-Max + 1-bit QJL)
+        GGML_TYPE_TBQ3_1  = 47, // TurboQuant 3-bit, blck_size=128 (head_dim=128)
+        GGML_TYPE_TBQ4_1  = 48, // TurboQuant 4-bit, blck_size=128 (head_dim=128)
+        GGML_TYPE_TBQP3_1 = 49, // TurboQuant_prod 3-bit, blck_size=128 (head_dim=128)
+        GGML_TYPE_TBQP4_1 = 50, // TurboQuant_prod 4-bit, blck_size=128 (head_dim=128)
+        GGML_TYPE_TBQ3_2  = 51, // TurboQuant 3-bit, blck_size=64 (head_dim=64)
+        GGML_TYPE_TBQ4_2  = 52, // TurboQuant 4-bit, blck_size=64 (head_dim=64)
+        GGML_TYPE_TBQP3_2 = 53, // TurboQuant_prod 3-bit, blck_size=64 (head_dim=64)
+        GGML_TYPE_TBQP4_2 = 54, // TurboQuant_prod 4-bit, blck_size=64 (head_dim=64)
+        GGML_TYPE_TBQ3_3  = 55, // TurboQuant 3-bit, double WHT per-head (D=64)
+        GGML_TYPE_TBQ4_3  = 56, // TurboQuant 4-bit, double WHT per-head (D=64)
+        GGML_TYPE_TBQP3_3 = 57, // TurboQuant_prod 3-bit, double WHT per-head (D=64)
+        GGML_TYPE_TBQP4_3 = 58, // TurboQuant_prod 4-bit, double WHT per-head (D=64)
+        GGML_TYPE_TBQ3_4  = 59, // TurboQuant 3-bit, blck_size=576 (head_dim=576, split 256+256+64)
+        GGML_TYPE_TBQ4_4  = 60, // TurboQuant 4-bit, blck_size=576 (head_dim=576, split 256+256+64)
+        GGML_TYPE_TBQP3_4 = 61, // TurboQuant_prod 3-bit, blck_size=576 (head_dim=576, split 256+256+64)
+        GGML_TYPE_TBQP4_4 = 62, // TurboQuant_prod 4-bit, blck_size=576 (head_dim=576, split 256+256+64)
+        GGML_TYPE_AMX3_1  = 63, // AMX K-side 3r+4φ polar, 128-WHT + cosine-optimal (head_dim=128)
+        GGML_TYPE_AMXV3_1 = 64, // AMX V-side 3-bit (tbq3_1 equivalent)
         // Prism-private Q2_0 at group size 128 (upstream Q2_0 is group 64). High id so it
-        // slots above upstream types; type_traits is sized to COUNT (143) with 43..141 unused.
+        // slots above upstream types; type_traits is sized to COUNT (143) with 66..141 unused.
         GGML_TYPE_PQ2_0 = 142,
         GGML_TYPE_PTQ1_0 = 143, // Prism-private ternary, group 128
         GGML_TYPE_COUNT   = 144,
@@ -2455,6 +2481,13 @@ extern "C" {
     GGML_API void ggml_flash_attn_ext_add_sinks(
             struct ggml_tensor * a,
             struct ggml_tensor * sinks);
+
+    // TurboQuant: attach decoupled rope slice tensor for MLA (_4 types, GLM/DeepSeek).
+    // K tensor stores latent only; k_rope stores the f16 rope[64] portion separately.
+    // Binds to src[5]. Optional — only used when K->type is TBQ `_4` family.
+    GGML_API void ggml_flash_attn_ext_add_k_rope(
+            struct ggml_tensor * a,
+            struct ggml_tensor * k_rope);
 
     // TODO: needs to be adapted to ggml_flash_attn_ext
     GGML_API struct ggml_tensor * ggml_flash_attn_back(

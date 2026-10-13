@@ -1,0 +1,9 @@
+// Force float accumulation for TBQ V types
+#include "../common.cuh"
+#undef V_DOT2_F32_F16_AVAILABLE
+
+// TurboQuant 576-block: Q8_0 keys + TBQ3_4 values
+
+#include "../fattn-vec.cuh"
+
+DECL_FATTN_VEC_CASE(576, GGML_TYPE_Q8_0, GGML_TYPE_TBQ3_4);

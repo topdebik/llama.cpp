@@ -337,6 +337,56 @@ static fattn_vec_case_t ggml_cuda_get_fattn_vec_case(const int64_t head_size, co
     FATTN_VEC_CASES_ALL_D(Q8_0, BF16)
     FATTN_VEC_CASES_ALL_D(BF16, BF16)
 
+    // TurboQuant (TBQ/TBQP) KV cache types — CUDA-only, 256-block family (_0) at D=256:
+    //   -ctk tbq3/tbq4/tbqp3/tbqp4 + -ctv tbq3/tbq4 (auto-resolved by head_dim in llama)
+    FATTN_VEC_CASE(256, F16,     TBQ3_0)
+    FATTN_VEC_CASE(256, F16,     TBQ4_0)
+    FATTN_VEC_CASE(256, TBQ3_0,  F16)
+    FATTN_VEC_CASE(256, TBQ4_0,  F16)
+    FATTN_VEC_CASE(256, TBQP3_0, F16)
+    FATTN_VEC_CASE(256, TBQP4_0, F16)
+    FATTN_VEC_CASE(256, TBQ3_0,  TBQ3_0)
+    FATTN_VEC_CASE(256, TBQ3_0,  TBQ4_0)
+    FATTN_VEC_CASE(256, TBQ4_0,  TBQ3_0)
+    FATTN_VEC_CASE(256, TBQ4_0,  TBQ4_0)
+    FATTN_VEC_CASE(256, TBQP3_0, TBQ3_0)
+    FATTN_VEC_CASE(256, TBQP3_0, TBQ4_0)
+    FATTN_VEC_CASE(256, TBQP4_0, TBQ3_0)
+    FATTN_VEC_CASE(256, TBQP4_0, TBQ4_0)
+
+    // 128-block family (_1) at D=128:
+    FATTN_VEC_CASE(128, F16,     TBQ3_1)
+    FATTN_VEC_CASE(128, F16,     TBQ4_1)
+    FATTN_VEC_CASE(128, TBQ3_1,  F16)
+    FATTN_VEC_CASE(128, TBQ4_1,  F16)
+    FATTN_VEC_CASE(128, TBQP3_1, F16)
+    FATTN_VEC_CASE(128, TBQP4_1, F16)
+    FATTN_VEC_CASE(128, TBQ3_1,  TBQ3_1)
+    FATTN_VEC_CASE(128, TBQ3_1,  TBQ4_1)
+    FATTN_VEC_CASE(128, TBQ4_1,  TBQ3_1)
+    FATTN_VEC_CASE(128, TBQ4_1,  TBQ4_1)
+    FATTN_VEC_CASE(128, TBQP3_1, TBQ3_1)
+    FATTN_VEC_CASE(128, TBQP3_1, TBQ4_1)
+    FATTN_VEC_CASE(128, TBQP4_1, TBQ3_1)
+    FATTN_VEC_CASE(128, TBQP4_1, TBQ4_1)
+
+    // 64-block family (K: _3 double-WHT, V: _2) at D=64:
+    FATTN_VEC_CASE( 64, F16,     TBQ3_2)
+    FATTN_VEC_CASE( 64, F16,     TBQ4_2)
+    FATTN_VEC_CASE( 64, TBQ3_2,  F16)
+    FATTN_VEC_CASE( 64, TBQ3_3,  F16)
+    FATTN_VEC_CASE( 64, TBQ4_3,  F16)
+    FATTN_VEC_CASE( 64, TBQP3_3, F16)
+    FATTN_VEC_CASE( 64, TBQP4_3, F16)
+    FATTN_VEC_CASE( 64, TBQ3_3,  TBQ3_2)
+    FATTN_VEC_CASE( 64, TBQ3_3,  TBQ4_2)
+    FATTN_VEC_CASE( 64, TBQ4_3,  TBQ3_2)
+    FATTN_VEC_CASE( 64, TBQ4_3,  TBQ4_2)
+    FATTN_VEC_CASE( 64, TBQP3_3, TBQ3_2)
+    FATTN_VEC_CASE( 64, TBQP3_3, TBQ4_2)
+    FATTN_VEC_CASE( 64, TBQP4_3, TBQ3_2)
+    FATTN_VEC_CASE( 64, TBQP4_3, TBQ4_2)
+
     return nullptr;
 }
 
@@ -379,6 +429,30 @@ static bool ggml_cuda_fattn_kv_type_supported(const ggml_type type) {
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
+        // TurboQuant KV cache types (vector kernels exist for the compiled pairs, see
+        // GGML_CUDA_FA_QUANTS; missing pairs fall back to a full-cache f16 conversion):
+        case GGML_TYPE_TBQ3_0:
+        case GGML_TYPE_TBQ4_0:
+        case GGML_TYPE_TBQP3_0:
+        case GGML_TYPE_TBQP4_0:
+        case GGML_TYPE_TBQ3_1:
+        case GGML_TYPE_TBQ4_1:
+        case GGML_TYPE_TBQP3_1:
+        case GGML_TYPE_TBQP4_1:
+        case GGML_TYPE_TBQ3_2:
+        case GGML_TYPE_TBQ4_2:
+        case GGML_TYPE_TBQP3_2:
+        case GGML_TYPE_TBQP4_2:
+        case GGML_TYPE_TBQ3_3:
+        case GGML_TYPE_TBQ4_3:
+        case GGML_TYPE_TBQP3_3:
+        case GGML_TYPE_TBQP4_3:
+        case GGML_TYPE_TBQ3_4:
+        case GGML_TYPE_TBQ4_4:
+        case GGML_TYPE_TBQP3_4:
+        case GGML_TYPE_TBQP4_4:
+        case GGML_TYPE_AMX3_1:
+        case GGML_TYPE_AMXV3_1:
             return true;
         default:
             return false;
@@ -474,6 +548,40 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
     }
 
     if (mask && mask->ne[2] != 1) {
+        return BEST_FATTN_KERNEL_NONE;
+    }
+
+    // TurboQuant kernel support (ported from the TurboQuant fork, v1.5.3):
+    //   - D<=256 (Qwen3.5 256, Llama/Qwen3 128, GPT-OSS 64): VEC kernel only
+    //   - D=576 asymmetric (GLM-4.7-Flash, DeepSeek-V2/V3 MLA): VEC kernel (f16 conversion
+    //     fallback if no template instance was compiled for the pair)
+    //   - MMA: not supported for TBQ K/V (the MMA path would dequantize the whole cache
+    //     to f16 on every call, which is slow and very memory hungry)
+    const bool tbq_k_type = K->type == GGML_TYPE_TBQ4_0 || K->type == GGML_TYPE_TBQ3_0
+     || K->type == GGML_TYPE_TBQP4_0 || K->type == GGML_TYPE_TBQP3_0
+     || K->type == GGML_TYPE_TBQ4_1 || K->type == GGML_TYPE_TBQ3_1
+     || K->type == GGML_TYPE_TBQP4_1 || K->type == GGML_TYPE_TBQP3_1
+     || K->type == GGML_TYPE_TBQ4_2 || K->type == GGML_TYPE_TBQ3_2
+     || K->type == GGML_TYPE_TBQP4_2 || K->type == GGML_TYPE_TBQP3_2
+     || K->type == GGML_TYPE_TBQ4_3 || K->type == GGML_TYPE_TBQ3_3
+     || K->type == GGML_TYPE_TBQP4_3 || K->type == GGML_TYPE_TBQP3_3
+     || K->type == GGML_TYPE_TBQ4_4 || K->type == GGML_TYPE_TBQ3_4
+     || K->type == GGML_TYPE_TBQP4_4 || K->type == GGML_TYPE_TBQP3_4
+     || K->type == GGML_TYPE_AMX3_1;
+    const bool tbq_v_type = V->type == GGML_TYPE_TBQ4_0 || V->type == GGML_TYPE_TBQ3_0
+                         || V->type == GGML_TYPE_AMXV3_1
+     || V->type == GGML_TYPE_TBQ4_1 || V->type == GGML_TYPE_TBQ3_1
+     || V->type == GGML_TYPE_TBQ4_2 || V->type == GGML_TYPE_TBQ3_2
+     || V->type == GGML_TYPE_TBQ4_3 || V->type == GGML_TYPE_TBQ3_3
+     || V->type == GGML_TYPE_TBQ4_4 || V->type == GGML_TYPE_TBQ3_4;
+    if (tbq_k_type || tbq_v_type) {
+        // TBQ types force the VEC kernel: the MMA path dequantizes the full K cache to f16
+        // on every call (fattn-common.cuh need_f16_K branch), which freezes GB10-class SoCs
+        // around K≈2048.  The VEC kernel reads TBQ blocks natively.
+        // Only D<=256 has TBQ vector template instances in this build (64/128/256).
+        if (Q->ne[0] <= 256 && Q->ne[0] % 64 == 0 && K->ne[1] % FATTN_KQ_STRIDE == 0) {
+            return BEST_FATTN_KERNEL_VEC;
+        }
         return BEST_FATTN_KERNEL_NONE;
     }
 

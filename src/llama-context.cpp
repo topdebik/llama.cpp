@@ -9,6 +9,7 @@
 #include "llama-io.h"
 #include "llama-kv-cache-iswa.h"
 #include "llama-kv-cache.h"
+#include "llama-kv-cache.h"
 #include "llama-memory-hybrid-iswa.h"
 #include "llama-memory-hybrid.h"
 #include "llama-memory.h"
@@ -2278,6 +2279,18 @@ int llama_context::decode(const llama_batch & batch_inp) {
     // wait for the computation to finish (automatically done when obtaining the model output)
     //synchronize();
 
+    if (tria_stats && tria_budget > 0) {
+        tria_counter += batch_inp.n_tokens;
+        if (tria_counter >= tria_interval) {
+            tria_counter = 0;
+            auto * kv = dynamic_cast<llama_kv_cache *>(memory.get());
+            if (kv) {
+                synchronize();
+                kv->tria_score_maybe(tria_stats, tria_budget, tria_keep_first);
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -3888,6 +3901,89 @@ llama_context * llama_init_from_model(
         }
     }
 
+    // TurboQuant head_dim auto-detection: map _0 types (blck_size=256) to _1 types (blck_size=128)
+    {
+        auto tbq_map = [&](ggml_type & t, uint32_t head_dim) {
+            if (head_dim == 128) {
+                ggml_type orig = t;
+                switch (t) {
+                    case GGML_TYPE_TBQ3_0:  t = GGML_TYPE_TBQ3_1;  break;
+                    case GGML_TYPE_TBQ4_0:  t = GGML_TYPE_TBQ4_1;  break;
+                    case GGML_TYPE_TBQP3_0: t = GGML_TYPE_TBQP3_1; break;
+                    case GGML_TYPE_TBQP4_0: t = GGML_TYPE_TBQP4_1; break;
+                    default: return;
+                }
+                LLAMA_LOG_INFO("%s: TurboQuant auto-map: %s -> %s (head_dim=%u)\n",
+                        __func__, ggml_type_name(orig), ggml_type_name(t), head_dim);
+            } else if (head_dim == 64) {
+                ggml_type orig = t;
+                switch (t) {
+                    case GGML_TYPE_TBQ3_0:  t = GGML_TYPE_TBQ3_2;  break;
+                    case GGML_TYPE_TBQ4_0:  t = GGML_TYPE_TBQ4_2;  break;
+                    case GGML_TYPE_TBQP3_0: t = GGML_TYPE_TBQP3_2; break;
+                    case GGML_TYPE_TBQP4_0: t = GGML_TYPE_TBQP4_2; break;
+                    default: return;
+                }
+                LLAMA_LOG_INFO("%s: TurboQuant auto-map: %s -> %s (head_dim=%u)\n",
+                        __func__, ggml_type_name(orig), ggml_type_name(t), head_dim);
+            } else if (head_dim != 256 && head_dim != 512) {
+                // _0 types support 256 and 512 (2×256 sub-blocks, e.g. GLM-4.7-Flash V)
+                switch (t) {
+                    case GGML_TYPE_TBQ3_0:
+                    case GGML_TYPE_TBQ4_0:
+                    case GGML_TYPE_TBQP3_0:
+                    case GGML_TYPE_TBQP4_0:
+                        LLAMA_LOG_WARN("%s: TurboQuant unsupported head_dim=%u, falling back to F16\n",
+                                __func__, head_dim);
+                        t = GGML_TYPE_F16;
+                        break;
+                    default: break;
+                }
+            }
+        };
+        tbq_map(params.type_k, model->hparams.n_embd_head_k());
+        tbq_map(params.type_v, model->hparams.n_embd_head_v());
+    }
+
+    // AMX3 (K: AMX3_1, V: AMXV3_1) is hard-wired to head_dim=128 (128-WHT + polar).
+    // Reject before `new llama_context` so we never partially construct the context
+    // and trigger the bad unwinding path that shows up as SIGSEGV on head_dim=256/576.
+    {
+        const bool amx_k = (params.type_k == GGML_TYPE_AMX3_1 || params.type_k == GGML_TYPE_AMXV3_1)
+                       && model->hparams.n_embd_head_k() != 128;
+        const bool amx_v = (params.type_v == GGML_TYPE_AMX3_1 || params.type_v == GGML_TYPE_AMXV3_1)
+                       && model->hparams.n_embd_head_v() != 128;
+        if (amx_k || amx_v) {
+            const uint32_t hd_k = model->hparams.n_embd_head_k();
+            const uint32_t hd_v = model->hparams.n_embd_head_v();
+            // GLM-style MLA (K=576 / V=512) uses 576-block TBQ*_4 family;
+            // the tbq_map auto-resolves `tbqp3`/`tbq3` shorthand to the right
+            // _4 variant based on head_dim, so the suggestion below is correct
+            // for both head_dim=256 (Qwen3.5/3.6) and head_dim=576 (GLM).
+            char line_model[80];
+            snprintf(line_model, sizeof(line_model),
+                     "  This model has head_dim_k=%u head_dim_v=%u.", hd_k, hd_v);
+            LLAMA_LOG_ERROR("\n");
+            LLAMA_LOG_ERROR("╔════════════════════════════════════════════════════════════════════╗\n");
+            LLAMA_LOG_ERROR("║%-68s║\n", "  ERROR: amx3 cache type is incompatible with this model");
+            LLAMA_LOG_ERROR("║%-68s║\n", "");
+            LLAMA_LOG_ERROR("║%-68s║\n", "  amx3 requires head_dim=128 (128-WHT + polar quantization).");
+            LLAMA_LOG_ERROR("║%-68s║\n", line_model);
+            LLAMA_LOG_ERROR("║%-68s║\n", "");
+            LLAMA_LOG_ERROR("║%-68s║\n", "  Use one of these cache types instead:");
+            LLAMA_LOG_ERROR("║%-68s║\n", "    --cache-type-k tbqp3 --cache-type-v tbq3  (recommended 3-bit)");
+            LLAMA_LOG_ERROR("║%-68s║\n", "    --cache-type-k tbqp4 --cache-type-v tbq4  (recommended 4-bit)");
+            LLAMA_LOG_ERROR("║%-68s║\n", "    --cache-type-k f16   --cache-type-v f16   (no quantization)");
+            LLAMA_LOG_ERROR("║%-68s║\n", "");
+            LLAMA_LOG_ERROR("║%-68s║\n", "  amx3 is designed for head_dim=128 models (Qwen3, LLaMA,");
+            LLAMA_LOG_ERROR("║%-68s║\n", "  Mistral, etc.). For larger head_dim, use tbq3/tbqp3 which");
+            LLAMA_LOG_ERROR("║%-68s║\n", "  auto-map to the correct block size for your model.");
+            LLAMA_LOG_ERROR("╚════════════════════════════════════════════════════════════════════╝\n");
+            LLAMA_LOG_ERROR("\n");
+            return nullptr;
+        }
+    }
+
     if (params.flash_attn_type != LLAMA_FLASH_ATTN_TYPE_DISABLED && ggml_is_quantized(params.type_k)) {
         const uint32_t blck_size = ggml_blck_size(params.type_k);
         for (uint32_t il = 0; il < model->hparams.n_layer(); ++il) {
@@ -3950,6 +4046,46 @@ llama_context * llama_new_context_with_model(
 
 void llama_free(llama_context * ctx) {
     delete ctx;
+}
+
+void llama_context::tria_set(struct llama_tria_stats * stats, int32_t budget, int32_t interval, int32_t keep_first) {
+    tria_stats      = stats;
+    tria_budget     = budget;
+    tria_interval   = (interval > 0) ? interval : 128;
+    tria_keep_first = (keep_first >= 0) ? keep_first : 0;
+    tria_counter    = 0;
+    LLAMA_LOG_INFO("%s: TriAttention attached (budget=%d interval=%d keep_first=%d stats=%p)\n",
+            __func__, budget, tria_interval, tria_keep_first, (void *)stats);
+}
+
+void llama_tria_attach(
+        struct llama_context    * ctx,
+        struct llama_tria_stats * stats,
+        int32_t                   budget,
+        int32_t                   interval,
+        int32_t                   keep_first) {
+    if (!ctx) return;
+    ctx->tria_set(stats, budget, interval, keep_first);
+}
+
+// ---------------------------------------------------------------------------
+// TriAttention load/free — thin shims that forward to ggml-cuda so the public
+// symbols live in libllama (matches the LLAMA_API declaration in llama.h).
+// Windows DLL linkage was broken before v1.7.1 because the definitions sat in
+// ggml-cuda.dll while llama.h promised they came from llama.dll.
+// ---------------------------------------------------------------------------
+#include "ggml-backend.h"
+extern "C" {
+GGML_BACKEND_API struct llama_tria_stats * _llama_tria_backend_load(const char * path);
+GGML_BACKEND_API void                      _llama_tria_backend_free(struct llama_tria_stats * stats);
+}
+
+struct llama_tria_stats * llama_tria_load(const char * path) {
+    return _llama_tria_backend_load(path);
+}
+
+void llama_tria_free(struct llama_tria_stats * stats) {
+    _llama_tria_backend_free(stats);
 }
 
 uint32_t llama_n_ctx(const llama_context * ctx) {

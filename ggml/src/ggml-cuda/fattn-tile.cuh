@@ -811,8 +811,13 @@ static __global__ void flash_attn_tile(
                             const int32_t nb11, const int32_t nb12, const int64_t nb13,
                             const int32_t nb21, const int32_t nb22, const int64_t nb23,
                             const int32_t ne31, const int32_t ne32, const int32_t ne33,
-                            const int32_t nb31, const int32_t nb32, const int64_t nb33) {
+                            const int32_t nb31, const int32_t nb32, const int64_t nb33,
+        const char * __restrict__ raw_K_data, const int32_t raw_K_stride,
+        const char * __restrict__ Q_wht2_data, const int32_t Q_wht2_stride,
+        const char * __restrict__ k_rope_data, const int32_t k_rope_stride) {
 #ifdef FLASH_ATTN_AVAILABLE
+    // TurboQuant side channels unused by tile kernel.
+    GGML_UNUSED_VARS(k_rope_data, k_rope_stride);
     const char * GGML_CUDA_RESTRICT Q        = Q_ptr;
     const char * GGML_CUDA_RESTRICT K        = K_ptr;
     const char * GGML_CUDA_RESTRICT V        = V_ptr;
@@ -833,7 +838,7 @@ static __global__ void flash_attn_tile(
                   nb11, nb12, nb13,
                   nb21, nb22, nb23,
                   ne31, ne32, ne33,
-                  nb31, nb32, nb33);
+                  nb31, nb32, nb33, raw_K_data, raw_K_stride, Q_wht2_data, Q_wht2_stride);
         NO_DEVICE_CODE;
         return;
     }
@@ -1140,7 +1145,8 @@ static __global__ void flash_attn_tile(
               nb11, nb12, nb13,
               nb21, nb22, nb23,
               ne31, ne32, ne33,
-              nb31, nb32, nb33);
+              nb31, nb32, nb33, raw_K_data, raw_K_stride, Q_wht2_data, Q_wht2_stride,
+              k_rope_data, k_rope_stride);
     NO_DEVICE_CODE;
 #endif // FLASH_ATTN_AVAILABLE
 }

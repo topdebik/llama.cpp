@@ -51,7 +51,12 @@ endfunction()
 
 # Determines which FlashAttention vector kernel template instances to compile, returns them in OUT_SRCS.
 function(ggml_cuda_fattn_vec_instances DIR OUT_SRCS)
-    set(FA_TYPES q4_0 q4_1 q5_0 q5_1 q8_0 bf16 f16)
+    set(FA_TYPES_ALL q4_0 q4_1 q5_0 q5_1 q8_0 bf16 f16)
+    # TurboQuant (TBQ/TBQP) KV cache types — only the families with hand-written template
+    # instances (fattn-vec-instance-tbq*.cu) are listed here so GGML_CUDA_FA_QUANTS accepts them.
+    set(FA_TYPES_TBQ tbq3_0 tbq4_0 tbqp3_0 tbqp4_0 tbq3_1 tbq4_1 tbqp3_1 tbqp4_1
+                     tbq3_2 tbq4_2 tbq3_3 tbq4_3 tbqp3_3 tbqp4_3)
+    set(FA_TYPES ${FA_TYPES_ALL} ${FA_TYPES_TBQ})
 
     string(TOLOWER "${GGML_CUDA_FA_QUANTS}" FA_QUANTS)
     string(STRIP   "${FA_QUANTS}" FA_QUANTS)
@@ -65,8 +70,8 @@ function(ggml_cuda_fattn_vec_instances DIR OUT_SRCS)
 
     if (FA_QUANTS STREQUAL "all")
         set(FA_COMBINATIONS "")
-        foreach (TYPE_V IN LISTS FA_TYPES)
-            foreach (TYPE_K IN LISTS FA_TYPES)
+        foreach (TYPE_V IN LISTS FA_TYPES_ALL)
+            foreach (TYPE_K IN LISTS FA_TYPES_ALL)
                 list(APPEND FA_COMBINATIONS ${TYPE_K}-${TYPE_V})
             endforeach()
         endforeach()
