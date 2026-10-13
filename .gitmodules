@@ -1,0 +1,3 @@
+[submodule "llama.cpp-AmesianX-TurboQuant"]
+	path = llama.cpp-AmesianX-TurboQuant
+	url = https://github.com/AmesianX/TurboQuant.git
