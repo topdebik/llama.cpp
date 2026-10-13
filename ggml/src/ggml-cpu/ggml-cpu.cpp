@@ -449,7 +449,13 @@ static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const st
                 op->type != GGML_TYPE_IQ2_XS  &&
                 op->type != GGML_TYPE_IQ2_S   &&
                 op->type != GGML_TYPE_IQ1_S   &&
-                op->type != GGML_TYPE_IQ1_M; // missing type_traits.from_float
+                op->type != GGML_TYPE_IQ1_M   &&
+                // TurboQuant types are CUDA-only: their CPU type traits have no
+                // type_traits.from_float, so the KV-cache quantize path (SET_ROWS/CPY
+                // with a tbq*/tbqp*/amx dst) must stay on the CUDA backend
+                (op->type < GGML_TYPE_TBQ3_0 || op->type > GGML_TYPE_TBQP4_4) &&
+                op->type != GGML_TYPE_AMX3_1  &&
+                op->type != GGML_TYPE_AMXV3_1; // missing type_traits.from_float
         case GGML_OP_MUL_MAT:
             if (ggml_get_op_params_i32(op, 1) == GGML_HINT_SRC0_IS_HADAMARD &&
                 src0->type == GGML_TYPE_F32 && op->type == GGML_TYPE_F32) {

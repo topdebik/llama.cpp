@@ -488,6 +488,23 @@ static void common_params_fit_impl(
     //   - for a dense model simply fill full layers, giving each device a contiguous slice of the model
     //   - for a MoE model, same as dense model but with all MoE tensors in system memory
 
+    // TurboQuant/AMX KV caches can only be quantized by the CUDA backend (their CPU type
+    // traits have no quantizer), so moving a KV-bearing layer to system memory would leave
+    // its cache with no backend able to run the KV write (SET_ROWS). Keep the initial
+    // all-GPU placement instead - the free memory target may not be met.
+    {
+        const auto kv_is_cuda_only = [](enum ggml_type t) {
+            return (t >= GGML_TYPE_TBQ3_0 && t <= GGML_TYPE_TBQP4_4) ||
+                    t == GGML_TYPE_AMX3_1 || t == GGML_TYPE_AMXV3_1;
+        };
+        if (kv_is_cuda_only(cparams->type_k) || kv_is_cuda_only(cparams->type_v)) {
+            LOG_WRN("%s: TurboQuant KV cache types (%s / %s) require every KV layer to stay in device memory, "
+                    "skipping layer offload - the free memory target may not be met\n",
+                    __func__, ggml_type_name(cparams->type_k), ggml_type_name(cparams->type_v));
+            return;
+        }
+    }
+
     // utility function that returns a static C string matching the tensors for a specific layer index and layer fraction:
     auto get_overflow_pattern = [&](const size_t il, const common_layer_fraction_t lf) -> const char * {
         constexpr size_t n_strings = 1000;

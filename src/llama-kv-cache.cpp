@@ -20,6 +20,15 @@ static bool ggml_is_power_of_2(int n) {
     return (n & (n - 1)) == 0;
 }
 
+// TurboQuant/AMX KV cache types can only be quantized by the CUDA backend
+// (their CPU type traits have no type_traits.from_float), so their caches must
+// stay in device memory
+static bool llama_kv_cache_type_is_cuda_only(enum ggml_type type) {
+    return (type >= GGML_TYPE_TBQ3_0 && type <= GGML_TYPE_TBQP4_4) ||
+            type == GGML_TYPE_AMX3_1  ||
+            type == GGML_TYPE_AMXV3_1;
+}
+
 // orthonormal Walsh-Hadamard rotation matrix
 // note: res^2 == I
 static void ggml_gen_hadamard(ggml_tensor * tensor) {
@@ -242,6 +251,17 @@ llama_kv_cache::llama_kv_cache(
         }
 
         LLAMA_LOG_DEBUG("%s: layer %3d: dev = %s\n", __func__, il, dev_name);
+
+        // a TBQ/AMX cache in host memory would leave the KV write (SET_ROWS) with no
+        // backend able to run it - fail with a clear message instead of aborting
+        // inside the graph scheduler
+        if (ggml_backend_buft_is_host(buft) &&
+            (llama_kv_cache_type_is_cuda_only(type_k) || llama_kv_cache_type_is_cuda_only(type_v))) {
+            throw std::runtime_error(
+                "KV cache type(s) '" + std::string(ggml_type_name(type_k)) + "'/'" + std::string(ggml_type_name(type_v)) +
+                "' require the KV cache to stay in device memory, but layer " + std::to_string(il) + " is assigned to " + dev_name +
+                " - keep the attention layers on the GPU (raise -ngl / avoid moving them to CPU) or use a CPU-capable cache type (e.g. q8_0)");
+        }
 
         ggml_context * ctx = ctx_for_buft(buft);
         if (!ctx) {

@@ -5130,6 +5130,11 @@ static void ggml_compute_forward_set_rows_impl(
 
     ggml_from_float_t const from_float = ggml_get_type_traits_cpu(dst->type)->from_float;
 
+    // quantized types without a CPU quantizer (e.g. TurboQuant tbq*/tbqp*/amx) must be
+    // rejected by ggml_backend_cpu_device_supports_op — calling a null from_float here
+    // would segfault inside the compute thread
+    GGML_ASSERT(from_float != nullptr && "missing type_traits.from_float for dst type (SET_ROWS)");
+
     for (int64_t i03 = 0; i03 < ne03; ++i03) {
         for (int64_t i02 = 0; i02 < ne02; ++i02) {
             for (int64_t i = ir0; i < ir1; ++i) {
