@@ -15,6 +15,16 @@
 >
 > Do NOT build from `prism-v6` (stale mid-migration snapshot) and do NOT mix this fork's `ggml-*` libraries with a stock llama.cpp build.
 
+> [!NOTE]
+> **This repository is a fork of the PrismML fork above.** It is prism-ml llama.cpp plus one addition: the **TurboQuant** KV-cache quantization family, backported from [AmesianX/TurboQuant](https://github.com/AmesianX/TurboQuant). Everything from PrismML-Eng/llama.cpp (branch `prism`) is unchanged; the TurboQuant sources are vendored in-tree, so no submodule is needed to build.
+>
+> What is added on top of prism-ml llama.cpp:
+>
+> - **New ggml types** `GGML_TYPE_TBQ3_0 … TBQP4_4`, `AMX3_1`/`AMXV3_1` (ids 43–64) with quant/dequant codecs, CPU type traits and ops.
+> - **KV-cache selection**: `-ctk/-ctv tbq3 | tbq4 | tbqp3 | tbqp4 | amx3`, with the `_0`/`_1`/`_2`/`_3` block-size variant picked automatically from `head_dim`. External `attn_rot_k/v` rotation is disabled for these types (the codec applies its own WHT). The speculative draft cache accepts `-ctk tbqp3` too.
+> - **CUDA FlashAttention**: K/V dequant and in-kernel quantizers (`set_rows`), plus FA vec/tile/mma kernels for 45 K-V type combinations (incl. all `tbq*`/`tbqp*` pairs) in `GGML_CUDA_FA_QUANTS` — quantized caches run under flash attention without an f16 fallback.
+> - **Verified** on `*-PQ2_0.gguf` (head_dim 256): `-ctk tbq3 -ctv tbq3` → `K (tbq3_0) = V (tbq3_0) = 24.50 MiB` per 4096-cell cache, `flash_attn = enabled`, correct generation.
+
 ---
 
 ![llama](https://raw.githubusercontent.com/ggml-org/llama.brand/refs/heads/master/cover/llama-cpp/cover-llama-cpp-dark.svg)
